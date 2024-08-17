@@ -75,4 +75,4 @@ const schema = mongoose.Schema(
   }
 );
 
-module.exports = new mongoose.model("Lottery", schema);
+module.exports = new mongoose.model("Game", schema);

@@ -1,5 +1,5 @@
 const LottaverseContract = require('../helper/contracts');
-const Lottery   = require('../Modals/lottery');
+const Game   = require('../Modals/lottery');
 const Purchase = require('../Modals/purchase');
 const TicketHolder = require('../Modals/ticketHolders');
 const {Contract, JsonRpcProvider} = require('ethers');
@@ -26,7 +26,7 @@ exports.purchase = async (req, res)=>{
         alreadyUser.lotteryBuy[lotteryType] = totalPrice//Number(thisLotteryBuy);
     }
     
-   const lottery = await Lottery.findById({_id});
+   const lottery = await Game.findById({_id});
    const alreadyLotteryHolders  = lottery.holders.includes(alreadyUser._id);
    if(!alreadyUser.participate.includes(lottery._id))
     alreadyUser.participate.push(lottery._id);
@@ -76,7 +76,7 @@ exports.purchase = async (req, res)=>{
 exports.getLotteryBuyer = async(req, res)=> {
     const {lotteryId} = req.query;
     try{
-    const lottery = await Lottery.findById(lotteryId)
+    const lottery = await Game.findById(lotteryId)
                     .populate("holders", "address totalBuy");
     if(!lottery) res.status(500).send('Invalid Lottery id');
     console.log(lottery)
@@ -100,7 +100,7 @@ exports.getLeaderBuyer = async(req, res)=> {
 
 exports.getLotteryHistory = async(req, res) => {
     try{
-      const Lotteries = await Lottery.find({});
+      const Lotteries = await Game.find({});
       res.status(200).send(Lotteries); 
     }catch(err){
         res.status(500).send('Something went wrong'); 
@@ -109,7 +109,7 @@ exports.getLotteryHistory = async(req, res) => {
 
 exports.getOngoingLottery = async(req, res) => {
     try{
-      const Lotteries = await Lottery.find().populate("holders", "address totalBuy");;
+      const Lotteries = await Game.find().populate("holders", "address totalBuy");;
       res.status(200).send(Lotteries); 
     }catch(err){
         res.status(500).send('Something went wrong'); 
@@ -151,7 +151,7 @@ exports.createLottery = async (req, res) => {
         for(let i=0; i < prizeDistribution.length; i++){
             totalPrize += Number(prizeDistribution[i]);
         }
-        const newLottery = new Lottery({
+        const newLottery = new Game({
             lotteryId,
             price,
             topPrize,
@@ -175,7 +175,7 @@ exports.createLottery = async (req, res) => {
 exports.updateLottery = async(req, res)=>{
     const {drawn, id} = req.body;
     try {
-        const lottery = await Lottery.findById(id);
+        const lottery = await Game.findById(id);
         if(!lottery) res.status(500).send("lottery not found")
         lottery.drawn = drawn;
         const provider = new JsonRpcProvider(fujiProviderUrl);
