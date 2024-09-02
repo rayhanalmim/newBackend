@@ -22,10 +22,10 @@ mongoose
     //listeningEvent()
 
     app.get("/", (req, res) => {
-      res.send('Welcome to Lottaverse API by 0xwd3v');
+      res.send("welcome to lottaverse");
     });
-    
-    require('./routes/basic.js')(app);
+
+    require("./routes/basic.js")(app);
 
     const PORT = process.env.PORT || 8080;
     const server = app.listen(PORT, () => {
