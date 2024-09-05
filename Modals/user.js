@@ -74,7 +74,7 @@ const userSchema = new mongoose.Schema(
     },
     referredUsers: [
       {
-        user: mongoose.Schema.Types.ObjectId,
+        user: String, // Reference to the User model,
         refLevel: Number,
       },
     ],

@@ -6,9 +6,10 @@ const { Contract, JsonRpcProvider } = require("ethers");
 const lottaverseABI = require("../const/lottaverse.json");
 const { contractAddress, fujiProviderUrl } = require("../const/address");
 const user = require("../Modals/user");
+const purchase = require("../Modals/purchase");
 
 exports.purchase = async (req, res) => {
-  const user = req.user;
+  const userid = req.user;
   try {
     const {
       lotteryId,
@@ -39,7 +40,7 @@ exports.purchase = async (req, res) => {
     const totalPrice = price * amount;
     if (!alreadyUser) {
       alreadyUser = new TicketHolder({
-        address: user,
+        address: userid,
         totalBuy: totalPrice, //Number(totalBuy),
         lotteryBuy: { lotteryType: totalPrice }, //Number(thisLotteryBuy)}
       });
@@ -101,6 +102,18 @@ exports.purchase = async (req, res) => {
       }
     }
     await referralUser.save();
+
+    try {
+      console.log("buyer", buyer);
+      const updateAcountStarus = await user.findOneAndUpdate(
+        { address: buyer },
+        { $set: { referralId: "" } }
+      );
+      console.log("updateAcountStarus", updateAcountStarus);
+    } catch (error) {
+      console.log("error: ", error);
+    }
+
     res.status(200).send("Ticket purchase successfully");
   } catch (err) {
     console.log(err);
@@ -277,20 +290,386 @@ exports.checkReferal = async (req, res) => {
   const { adress } = req.params;
   const { ref } = req.query;
 
-  console.log(ref);
+  if (adress == ref) {
+    return res.send(null);
+  }
+
+  if (ref) {
+    const isValidReferal = await user.findOne({ address: ref });
+    if (!isValidReferal) {
+      return res.send(null);
+    }
+  }
+
   if (ref != "undefined") {
     const updatedUser = await user.findOneAndUpdate(
       { address: adress }, // Replace `userId` with the actual user ID or query condition
       { referredBy: ref },
       { new: true } // This returns the updated document
     );
-    const temp = updatedUser.referredBy;
+
+    if (updatedUser) {
+      let firstUser = await user.findOneAndUpdate(
+        { address: ref },
+        {
+          $push: { referredUsers: { user: adress, refLevel: 1 } },
+        },
+        { new: true } // This returns the updated document
+      );
+
+      console.log("from curret state", firstUser);
+
+      if (firstUser?.referredBy) {
+        let secondUser = await user.findOneAndUpdate(
+          { address: firstUser.referredBy },
+          {
+            $push: { referredUsers: { user: adress, refLevel: 2 } },
+          },
+          { new: true } // This returns the updated document
+        );
+        if (secondUser?.referredBy) {
+          let thirdUser = await user.findOneAndUpdate(
+            { address: secondUser.referredBy },
+            {
+              $push: { referredUsers: { user: adress, refLevel: 3 } },
+            },
+            { new: true } // This returns the updated document
+          );
+          if (thirdUser?.referredBy) {
+            let fourthUser = await user.findOneAndUpdate(
+              { address: thirdUser.referredBy },
+              {
+                $push: { referredUsers: { user: adress, refLevel: 4 } },
+              },
+              { new: true } // This returns the updated document
+            );
+            if (fourthUser?.referredBy) {
+              let fivethUser = await user.findOneAndUpdate(
+                { address: fourthUser.referredBy },
+                {
+                  $push: { referredUsers: { user: adress, refLevel: 5 } },
+                },
+                { new: true } // This returns the updated document
+              );
+              if (fivethUser?.referredBy) {
+                let sixUser = await user.findOneAndUpdate(
+                  { address: fivethUser.referredBy },
+                  {
+                    $push: { referredUsers: { user: adress, refLevel: 6 } },
+                  },
+                  { new: true } // This returns the updated document
+                );
+                if (sixUser?.referredBy) {
+                  let serven = await user.findOneAndUpdate(
+                    { address: sixUser.referredBy },
+                    {
+                      $push: { referredUsers: { user: adress, refLevel: 7 } },
+                    },
+                    { new: true } // This returns the updated document
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const temp = updatedUser?.referredBy;
     return res.send(temp);
   } else {
-    console.log("ref:", ref);
-    console.log("clicked", adress);
     const referExists = await user.findOne({ address: adress });
-    const temp = referExists.referredBy;
+    const temp = referExists?.referredBy || null;
     res.send(temp);
+  }
+};
+
+// exports.getReferal = async (req, res) => {
+//   const { adress } = req.params;
+//   try {
+//     console.log();
+//     const userData = await user.findOne({ address: adress });
+//     res.send({ userData });
+//   } catch (error) {}
+// };
+
+exports.getReferal = async (req, res) => {
+  const { adress } = req.params;
+
+  try {
+    // Find the primary user by address
+    const primaryUser = await user.findOne({ address: adress });
+
+    if (!primaryUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    console.log(primaryUser);
+    // Extract referred user addresses
+    const referredUserAddresses = primaryUser.referredUsers.map(
+      (ref) => ref.user
+    );
+
+    console.log(referredUserAddresses);
+
+    // Fetch details for each referred user
+    const referredUsersDetails = await Promise.all(
+      referredUserAddresses.map(async (address) => {
+        const userDetail = await user.findOne({ address });
+        if (userDetail) {
+          return {
+            address: userDetail.address,
+            earnings: userDetail.earnings,
+            commissionEarnings: userDetail.commissionEarnings,
+            availableBalance: userDetail.availableBalance,
+            userType: userDetail.userType,
+          };
+        } else {
+          // If userDetail is null, return default values or handle it as needed
+          return {
+            address: address,
+            earnings: 0,
+            commissionEarnings: 0,
+            availableBalance: 0,
+            userType: "unknown",
+          };
+        }
+      })
+    );
+
+    // Add details to the referredUsers array
+    const updatedReferredUsers = primaryUser.referredUsers.map(
+      (ref, index) => ({
+        ...ref,
+        userDetails: referredUsersDetails[index],
+      })
+    );
+
+    // Prepare the response data
+    const responseData = {
+      ...primaryUser._doc, // Spread the primary user data
+      referredUsers: updatedReferredUsers,
+    };
+
+    // Send the populated user data
+    res.json({ userData: responseData });
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while fetching user data" });
+  }
+};
+
+// Function to calculate total amount spent by each buyer
+const calculateTotalSpent = (groupedByBuyer) => {
+  const totalSpent = {};
+
+  Object.entries(groupedByBuyer).forEach(([buyer, purchases]) => {
+    totalSpent[buyer] = purchases.reduce(
+      (sum, purchase) => sum + purchase.amount,
+      0
+    );
+  });
+
+  console.log("Server is running on port 8080.");
+  Object.entries(totalSpent).forEach(([buyer, total]) => {
+    console.log(`Total spent by ${buyer}: ${total}`);
+  });
+
+  return totalSpent;
+};
+
+// ----------------------topBuyer
+exports.topBuyer = async (req, res) => {
+  try {
+    const holders = await purchase.find();
+
+    const groupedByBuyer = holders.reduce((acc, current) => {
+      const buyer = current.buyer.toLowerCase(); // To ensure case-insensitivity
+      if (!acc[buyer]) {
+        acc[buyer] = [];
+      }
+      acc[buyer].push(current);
+      return acc;
+    }, {});
+
+    const sortedData = Object.entries(groupedByBuyer)
+      .sort(([, a], [, b]) => b.length - a.length)
+      .map(([key, value]) => ({
+        buyer: key,
+        purchases: value,
+      }));
+
+    res.status(200).json({ sortedData });
+  } catch (err) {
+    res.status(500).send("Something went wrong");
+  }
+};
+
+exports.topLeader = async (req, res) => {
+  try {
+    const holders = await purchase.find();
+    let topleaderAccount = [];
+    let topLeader = [];
+
+    // Group by buyer
+    const groupedByBuyer = holders.reduce((acc, current) => {
+      const buyer = current.buyer; // To ensure case-insensitivity
+      if (!acc[buyer]) {
+        acc[buyer] = [];
+      }
+      acc[buyer].push(current);
+      return acc;
+    }, {});
+
+    // Calculate number of tickets for each buyer
+    const ticketCounts = Object.keys(groupedByBuyer).reduce((acc, buyer) => {
+      acc[buyer] = groupedByBuyer[buyer].length;
+      return acc;
+    }, {});
+
+    // Filter buyers with at least 10 tickets
+    const qualifiedBuyers = Object.keys(ticketCounts).filter(
+      (buyer) => ticketCounts[buyer] >= 10
+    );
+
+    // Filter grouped data to include only those with at least 10 tickets
+    const filteredGroupedByBuyer = Object.keys(groupedByBuyer)
+      .filter((buyer) => qualifiedBuyers.includes(buyer))
+      .reduce((acc, buyer) => {
+        acc[buyer] = groupedByBuyer[buyer];
+        return acc;
+      }, {});
+
+    for (const buyer in filteredGroupedByBuyer) {
+      const isPremium = await user.findOne({
+        address: buyer,
+        userType: "premium",
+      });
+
+      if (isPremium) {
+        // Count the number of referredUsers with refLevel: 1
+        const referralCount = isPremium.referredUsers.filter(
+          (referral) => referral.refLevel === 1
+        ).length;
+
+        console.log("inside the referal functions: ", referralCount);
+
+        if (referralCount >= 10) {
+          // Count the number of referredUsers by each refLevel
+          const referralCounts = {};
+          for (let level = 1; level <= 7; level++) {
+            referralCounts[level] = isPremium.referredUsers.filter(
+              (referral) => referral.refLevel === level
+            ).length;
+          }
+
+          // Check if the user has at least 10 referrals at refLevel: 1
+          if (referralCounts[1] >= 10) {
+            console.log(
+              `User ${buyer} has ${referralCounts[1]} refLevel: 1 referrals.`
+            );
+
+            // Check if the user has at least 1 referral at each level from 1 to 7
+            const hasAllLevels = Object.keys(referralCounts).every(
+              (level) => referralCounts[level] > 0
+            );
+
+            if (hasAllLevels) {
+              console.log(
+                `User ${buyer} has referrals at all levels from 1 to 7.`
+              );
+              topleaderAccount.push(buyer);
+            }
+          }
+        }
+      }
+    }
+
+    topLeader.map(async (user) => {
+      const holders = await purchase.findOne({ address: user });
+      if (holders) {
+        topLeader.push(holders);
+      }
+    });
+
+    res.status(200).json({ topLeader });
+  } catch (err) {
+    res.status(500).send("Something went wrong");
+  }
+};
+
+exports.generationRefer = async (req, res) => {
+  const { userId } = req.params;
+  let userData = [];
+
+  try {
+    const currentUser = await user.findOne({ address: userId });
+
+    if (currentUser) {
+      // Use Promise.all to wait for all asynchronous operations to complete
+      userData = await Promise.all(
+        currentUser.referredUsers.map(async (item) => {
+          const fetchCurrentUser = await purchase.find({ buyer: item.user });
+          let totalSum = fetchCurrentUser.reduce((accumulator, item) => {
+            return accumulator + item.price;
+          }, 0);
+
+          // Calculate the commission based on refLevel
+          if (item.refLevel == 1) {
+            totalSum = (totalSum / 100) * 10;
+          }
+          if (item.refLevel == 2) {
+            totalSum = (totalSum / 100) * 5;
+          }
+          if (item.refLevel == 3) {
+            totalSum = (totalSum / 100) * 3;
+          }
+          if (item.refLevel == 4) {
+            totalSum = (totalSum / 100) * 2;
+          }
+          if (item.refLevel == 5) {
+            totalSum = (totalSum / 100) * 1;
+          }
+          if (item.refLevel == 6) {
+            totalSum = (totalSum / 100) * 1;
+          }
+          if (item.refLevel == 7) {
+            totalSum = (totalSum / 100) * 1;
+          }
+
+          const checkActiveStatus = await user.findOne({ address: item.user });
+          const combainData = {
+            userId: item.user,
+            refLevel: item.refLevel,
+            commision: totalSum || 0,
+            activeStatus: checkActiveStatus.referralId,
+          };
+
+          return combainData;
+        })
+      );
+    }
+
+    console.log("from outer : ", userData);
+    res.send(userData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: "An error occurred." });
+  }
+};
+
+exports.totalPurcheses = async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const fetchCurrentUser = await purchase.find({ buyer: userId });
+    let totalSum = fetchCurrentUser.reduce((accumulator, item) => {
+      return accumulator + item.price;
+    }, 0);
+    res.send({ totalSum });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: "An error occurred." });
   }
 };
